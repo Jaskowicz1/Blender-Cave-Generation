@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'CaveGen',
     'author': 'sdfgeoff, Edited by Archie Jaskowicz',
-    'version': (0, 0, 1),
+    'version': (0, 0, 2),
     "blender": (2, 80, 0),
     'location': 'View3D > Add > Mesh',
     'description': 'Makes Caves using metaballs converted to mesh. Created by sdfgeoff, Edited and Updated by Archie Jaskowicz.',
@@ -42,16 +42,28 @@ def addCave(self, context):
         rand = random.choice(types)
         return rand
 
-    def addRandLights(Prob, oldLoc,passedName,passedScene):
+    def addRandLights(Prob, oldLoc, passedName, passedScene):
         print("user wants lights")
         if random.random() < Prob:
             print("create a light")
-            la_lamp = bpy.data.lamps.new("la_" + passedName,'POINT')
+            print(passedScene)
+            print("Scene")
+            la_lamp = bpy.data.lights.new("la_" + passedName,'POINT')
+            # USE CYCLES
             la_lamp.energy = 0.1
             la_lamp.distance = 15
-            ob_light = bpy.data.objects.new(passedName,la_lamp)
+            ob_light = bpy.data.objects.new(name=passedName, object_data=la_lamp)
             ob_light.location = oldLoc
-            passedScene.objects.link(ob_light)
+            
+            bpy.context.collection.objects.link(ob_light)
+        
+            # We don't want to try and make the light active as that means we will be attempting to add modifiers to the light.
+            #bpy.context.view_layer.objects.active = ob_light
+        
+            # Update the scene, even though it may not be needed.
+            #depsGraph = bpy.context.evaluated_depsgraph_get() 
+            #depsGraph.update()
+            
             '''
             bpy.ops.object.editmode_toggle()
             bpy.ops.object.lamp_add(type='POINT', view_align=False, location=oldLoc)
@@ -59,24 +71,26 @@ def addCave(self, context):
             print (bpy.data.objects)
             #bpy.context.scene.objects.active = cave
             #bpy.ops.object.editmode_toggle()
-            '''            
+            '''
 
-    def generateNew(oldLoc, oldScale, run,passedScene):
+    def generateNew(oldLoc, oldScale, run, passedScene):
         newLoc = randLoc()*oldScale[0]+oldLoc[0], randLoc()*oldScale[1]+oldLoc[1], randLoc()*oldScale[2]+oldLoc[2]
         
         ball = bpy.ops.object.metaball_add(type=randType(), location=(newLoc))
         if self.lights == True:
             light_name = "cave_lamp_" + str(run)
-            addRandLights(self.lightProb, oldLoc,light_name,passedScene)
+            addRandLights(self.lightProb, oldLoc, light_name, passedScene)
         #if random.random() > 0.9:
         #    createLamp(newLoc, run)
         #mball = bpy.context.visible_objects[run]
         #metaball = mball.data
+        
+        # Experimenting with random scale.
 
-        #newScale = [randScale(), randScale(), randScale()]
-        #mball.scale[0] = newScale[0]
-        #mball.scale[1] = newScale[1]
-        #mball.scale[2] = newScale[2]
+        newScale = [randScale(), randScale(), randScale()]
+        mball.scale[0] = newScale[0]
+        mball.scale[1] = newScale[1]
+        mball.scale[2] = newScale[2]
         return newLoc, oldScale
 
     mball = bpy.context.selected_objects[0]
@@ -88,7 +102,7 @@ def addCave(self, context):
     run = 0
     while run < self.iterations+1:
         #print ("adding mball "+str(run))
-        oldLoc, oldScale= generateNew(oldLoc, oldScale, run,context.scene)
+        oldLoc, oldScale= generateNew(oldLoc, oldScale, run, bpy.context.scene)
         run += 1
 
     
@@ -96,8 +110,21 @@ def addCave(self, context):
 
     bpy.ops.object.editmode_toggle()
 
-    if self.mesh == True:   
+    if self.mesh == True:
+        
         bpy.ops.object.convert(target='MESH')
+        
+        # This is just in-case the converting above doesn't work.
+        # ---------------------------------
+        
+        ob = bpy.context.active_object
+        dg = bpy.context.evaluated_depsgraph_get()
+        
+        ob = ob.evaluated_get(dg) #this gives us the evaluated version of the object. Aka with all modifiers and deformations applied.
+        me = ob.to_mesh()
+        
+        # ---------------------------------
+
         bpy.ops.object.editmode_toggle()
         bpy.ops.mesh.vertices_smooth(repeat=2)
         bpy.ops.mesh.subdivide(number_cuts=1, fractal=5, seed=0)
@@ -134,7 +161,7 @@ class caveGen(bpy.types.Operator, AddObjectHelper):
 
     mesh: BoolProperty(name="Convert to mesh", default=True, description="Converts to mesh and does some subdivide/fractal functions")
     lights: BoolProperty(name="Lights", default=False, description="Adds Lights in the passage")
-    lightProb: FloatProperty(name="Light Probability", default=0.1, min=0.001, max=1.0, description="Chance of a light being placed at any given point")
+    lightProb: FloatProperty(name="Light Probability", default=0.5, min=0.001, max=2.0, description="Chance of a light being placed at any given point")
     random_seed: IntProperty(name="Random Seed", description="Set the random seed for this cave object", default = 101, min = -420, max = 420)
     
     minscale: FloatProperty(name="Min Scale", description="Minimum scale of each metaball", default=1, min=0.1, max=10000)
